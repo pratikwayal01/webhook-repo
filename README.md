@@ -28,7 +28,7 @@ webhook-repo/
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-webhook-repo-url>
+git clone https://github.com/pratikwayal01/webhook-repo.git
 cd webhook-repo
 ```
 
