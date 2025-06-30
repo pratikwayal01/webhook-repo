@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Webhook Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #24292e 0%, #586069 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .last-updated {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .actions-container {
+            min-height: 400px;
+        }
+
+        .action-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .action-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .action-item.push::before {
+            background: #28a745;
+        }
+
+        .action-item.pull_request::before {
+            background: #007bff;
+        }
+
+        .action-item.merge::before {
+            background: #6f42c1;
+        }
+
+        .action-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .action-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .action-type.push {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+
+        .action-type.pull_request {
+            background: rgba(0, 123, 255, 0.1);
+            color: #007bff;
+        }
+
+        .action-type.merge {
+            background: rgba(111, 66, 193, 0.1);
+            color: #6f42c1;
+        }
+
+        .action-time {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .action-description {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            color: #333;
+        }
+
+        .author {
+            font-weight: 600;
+            color: #24292e;
+        }
+
+        .branch {
+            background: #f8f9fa;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #586069;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .action-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 GitHub Webhook Monitor</h1>
+            <p>Real-time tracking of repository activities</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Live Monitoring</span>
+            </div>
+            <div class="last-updated" id="lastUpdated">
+                Last updated: Never
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="actions-container" id="actionsContainer">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading recent activities...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastUpdateTime = null;
+        let isLoading = false;
+
+        async function fetchActions() {
+            if (isLoading) return;
+            
+            isLoading = true;
+            try {
+                const response = await fetch('/api/actions');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const actions = await response.json();
+                displayActions(actions);
+                updateLastUpdatedTime();
+                
+            } catch (error) {
+                console.error('Error fetching actions:', error);
+                displayError('Failed to load activities. Please check your connection.');
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function displayActions(actions) {
+            const container = document.getElementById('actionsContainer');
+            
+            if (!actions || actions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        <h3>No activities yet</h3>
+                        <p>Waiting for webhook events from your repository...</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const actionsHTML = actions.map(action => {
+                const description = formatActionDescription(action);
+                return `
+                    <div class="action-item ${action.action}">
+                        <div class="action-header">
+                            <span class="action-type ${action.action}">${action.action.replace('_', ' ')}</span>
+                            <span class="action-time">${action.formatted_timestamp}</span>
+                        </div>
+                        <div class="action-description">${description}</div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = actionsHTML;
+        }
+
+        function formatActionDescription(action) {
+            const author = `<span class="author">${action.author}</span>`;
+            
+            switch (action.action) {
+                case 'push':
+                    return `${author} pushed to <span class="branch">${action.to_branch}</span>`;
+                
+                case 'pull_request':
+                    return `${author} submitted a pull request from <span class="branch">${action.from_branch}</span> to <span class="branch">${action.to_branch}</span>`;
+                
+                case 'merge':
+                    return `${author} merged branch <span class="branch">${action.from_branch}</span> to <span class="branch">${action.to_branch}</span>`;
+                
+                default:
+                    return `${author} performed ${action.action}`;
+            }
+        }
+
+        function displayError(message) {
+            const container = document.getElementById('actionsContainer');
+            container.innerHTML = `
+                <div class="error-message">
+                    <strong>Error:</strong> ${message}
+                </div>
+                <div class="empty-state">
+                    <h3>Unable to load activities</h3>
+                    <p>Please refresh the page or check your connection.</p>
+                </div>
+            `;
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', {
+                hour12: true,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastUpdated').textContent = `Last updated: ${timeString}`;
+        }
+
+        // Initial load
+        fetchActions();
+
+        // Poll every 15 seconds as required
+        setInterval(fetchActions, 15000);
+
+        // Also refresh when page becomes visible (user switches back to tab)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                fetchActions();
+            }
+        });
+    </script>
+</body>
+</html>
